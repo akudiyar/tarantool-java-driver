@@ -1,5 +1,6 @@
 io.tarantool.driver
 io.tarantool.driver.api
+io.tarantool.driver.api.conditions
 io.tarantool.driver.api.space
 io.tarantool.driver.api.tuple
 io.tarantool.driver.auth
