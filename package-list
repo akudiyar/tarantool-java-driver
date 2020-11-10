@@ -3,6 +3,7 @@ io.tarantool.driver.api
 io.tarantool.driver.api.conditions
 io.tarantool.driver.api.space
 io.tarantool.driver.api.tuple
+io.tarantool.driver.api.tuple.operations
 io.tarantool.driver.auth
 io.tarantool.driver.cluster
 io.tarantool.driver.codecs
@@ -12,6 +13,5 @@ io.tarantool.driver.handlers
 io.tarantool.driver.mappers
 io.tarantool.driver.metadata
 io.tarantool.driver.protocol
-io.tarantool.driver.protocol.operations
 io.tarantool.driver.protocol.requests
 io.tarantool.driver.proxy
