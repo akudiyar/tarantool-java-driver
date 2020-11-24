@@ -15,3 +15,4 @@ io.tarantool.driver.metadata
 io.tarantool.driver.protocol
 io.tarantool.driver.protocol.requests
 io.tarantool.driver.proxy
+io.tarantool.driver.utils
