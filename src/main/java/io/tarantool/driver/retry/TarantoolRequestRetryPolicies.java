@@ -2,7 +2,9 @@ package io.tarantool.driver.retry;
 
 import io.tarantool.driver.exceptions.TarantoolAttemptsLimitException;
 import io.tarantool.driver.exceptions.TarantoolClientException;
+import io.tarantool.driver.exceptions.TarantoolServerInternalNetworkException;
 import io.tarantool.driver.exceptions.TarantoolTimeoutException;
+import io.tarantool.driver.exceptions.TarantoolConnectionException;
 import io.tarantool.driver.utils.Assert;
 
 import java.util.concurrent.CompletableFuture;
@@ -22,7 +24,20 @@ import java.util.function.Supplier;
  */
 public final class TarantoolRequestRetryPolicies {
 
-    private static final Function<Throwable, Boolean> retryAll = t -> true;
+    public static Function<Throwable, Boolean> retryAll = t -> true;
+    public static <T extends Function<Throwable, Boolean>> Function<Throwable, Boolean>
+    withNetworkErrors(T exceptionCheck) {
+        return e -> {
+            boolean retryRequest = false;
+            Boolean userExceptionCheck = exceptionCheck.apply(e);
+            if (e instanceof TimeoutException ||
+                    e instanceof TarantoolConnectionException ||
+                    e instanceof TarantoolServerInternalNetworkException) {
+                retryRequest = true;
+            }
+            return retryRequest || userExceptionCheck;
+        };
+    }
 
     private TarantoolRequestRetryPolicies() {
     }

@@ -2,6 +2,8 @@ package io.tarantool.driver.retry;
 
 import io.tarantool.driver.exceptions.TarantoolAttemptsLimitException;
 import io.tarantool.driver.exceptions.TarantoolClientException;
+import io.tarantool.driver.exceptions.TarantoolConnectionException;
+import io.tarantool.driver.exceptions.TarantoolServerInternalNetworkException;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -18,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * @author Alexey Kuzin
+ * @author Artyom Dubinin
  */
 class RequestRetryPolicyTest {
 
@@ -156,6 +159,76 @@ class RequestRetryPolicyTest {
         assertTrue(wrappedFuture.get());
     }
 
+    @Test
+    void testWithNetworkErrors_retryWhileTimeoutError() {
+        RequestRetryPolicy policy = TarantoolRequestRetryPolicies.byNumberOfAttempts(4,
+                TarantoolRequestRetryPolicies.withNetworkErrors(e -> false)
+        ).build().create();
+        CompletableFuture<Boolean> wrappedFuture =
+        policy.wrapOperation(this::timeoutExceptionFailingFuture, executor);
+        try {
+            wrappedFuture.get();
+        } catch (ExecutionException | InterruptedException e) {
+            assertTrue(e.getCause() instanceof TarantoolAttemptsLimitException);
+            assertEquals("Attempts limit reached: 4", e.getCause().getMessage());
+            assertTrue(e.getCause().getCause() instanceof TimeoutException);
+            assertEquals("Fail", e.getCause().getCause().getMessage());
+        }
+    }
+
+    @Test
+    void testWithNetworkErrors_retryWhileTarantoolConnectionError() {
+        RequestRetryPolicy policy = TarantoolRequestRetryPolicies.byNumberOfAttempts(4,
+                TarantoolRequestRetryPolicies.withNetworkErrors(e -> false)
+        ).build().create();
+        CompletableFuture<Boolean> wrappedFuture = policy.wrapOperation(
+                this::TarantoolConnectionExceptionFailingFuture, executor);
+        try {
+            wrappedFuture.get();
+        } catch (ExecutionException | InterruptedException e) {
+            assertTrue(e.getCause() instanceof TarantoolAttemptsLimitException);
+            assertEquals("Attempts limit reached: 4", e.getCause().getMessage());
+            assertTrue(e.getCause().getCause() instanceof TarantoolConnectionException);
+            assertEquals("The client is not connected to Tarantool server",
+                    e.getCause().getCause().getMessage());
+        }
+    }
+
+    @Test
+    void testWithNetworkErrors_retryWhileTarantoolServerInternalNetworkError() {
+        RequestRetryPolicy policy = TarantoolRequestRetryPolicies.byNumberOfAttempts(4,
+                TarantoolRequestRetryPolicies.withNetworkErrors(e -> false)
+        ).build().create();
+        CompletableFuture<Boolean> wrappedFuture = policy.wrapOperation(
+                this::TarantoolServerInternalNetworkExceptionFailingFuture, executor);
+        try {
+            wrappedFuture.get();
+        } catch (ExecutionException | InterruptedException e) {
+            assertTrue(e.getCause() instanceof TarantoolAttemptsLimitException);
+            assertEquals("Attempts limit reached: 4", e.getCause().getMessage());
+            assertTrue(e.getCause().getCause() instanceof TarantoolServerInternalNetworkException);
+            assertEquals("code: 77",
+                    e.getCause().getCause().getMessage());
+        }
+    }
+
+    @Test
+    void testWithNetworkErrors_notNetworkError() {
+        AtomicReference<Integer> retries = new AtomicReference<>(3);
+        RequestRetryPolicy policy = TarantoolRequestRetryPolicies.byNumberOfAttempts(3,
+                TarantoolRequestRetryPolicies.withNetworkErrors(e -> false)
+        ).build().create();
+        CompletableFuture<Boolean> wrappedFuture = policy.wrapOperation(
+                () -> failingIfAvailableRetriesFuture(retries.getAndUpdate(r -> r - 1)), executor);
+        try {
+            wrappedFuture.get();
+        } catch (ExecutionException | InterruptedException e) {
+            assertTrue(e.getCause() instanceof RuntimeException);
+            assertEquals("Should fail 3 times", e.getCause().getMessage());
+            assertEquals(2, retries.get());
+        }
+    }
+
     private CompletableFuture<Boolean> simpleSuccessFuture() {
         return CompletableFuture.completedFuture(true);
     }
@@ -163,6 +236,24 @@ class RequestRetryPolicyTest {
     private CompletableFuture<Boolean> simpleFailingFuture() {
         CompletableFuture<Boolean> result = new CompletableFuture<>();
         result.completeExceptionally(new RuntimeException("Fail"));
+        return result;
+    }
+
+    private CompletableFuture<Boolean> timeoutExceptionFailingFuture() {
+        CompletableFuture<Boolean> result = new CompletableFuture<>();
+        result.completeExceptionally(new TimeoutException("Fail"));
+        return result;
+    }
+
+    private CompletableFuture<Boolean> TarantoolConnectionExceptionFailingFuture() {
+        CompletableFuture<Boolean> result = new CompletableFuture<>();
+        result.completeExceptionally(new TarantoolConnectionException(new RuntimeException()));
+        return result;
+    }
+
+    private CompletableFuture<Boolean> TarantoolServerInternalNetworkExceptionFailingFuture() {
+        CompletableFuture<Boolean> result = new CompletableFuture<>();
+        result.completeExceptionally(new TarantoolServerInternalNetworkException("code: 77"));
         return result;
     }
 
